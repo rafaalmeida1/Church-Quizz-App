@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SkeletonCard, LoadingDots, Spinner } from "@/components/ui/loading"
-import { BookOpen, Star, Timer, CheckCircle2, Plus, TrendingUp, Award, Flame, ClipboardCheck, AlertCircle } from "lucide-react"
+import { BookOpen, Star, Timer, CheckCircle2, Plus, TrendingUp, Award, Flame, ClipboardCheck, AlertCircle, Bell } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { User, Parish, Quiz } from "@/lib/types"
+import NotificationBell from "@/components/NotificationBell"
 
 interface QuizzesClientProps {
   user: User;
@@ -153,14 +154,18 @@ export default function QuizzesClient({
           </p>
         </div>
         
-        {user.role === "catequista" && (
-          <Button asChild className="btn-catholic">
-            <Link href="/quizzes/create" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              <span>Criar novo Quiz</span>
-            </Link>
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <NotificationBell userId={user?.id} />
+          
+          {user.role === "catequista" && (
+            <Button asChild className="btn-catholic">
+              <Link href="/quizzes/create" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span>Criar novo Quiz</span>
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
       
       <div className="mb-8 animate-reveal">
