@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { AlertCircle, AlertTriangle, Loader2 } from "lucide-react"
 import { LoadingButton } from "@/components/ui/loading-button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { createQuizAction } from "@/app/actions"
 import { User } from "@/lib/types"
 
@@ -18,6 +20,7 @@ export default function CreateQuizPage() {
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [parishId, setParishId] = useState<string | null>(null)
+  const [loadingStage, setLoadingStage] = useState<string>("")
 
   useEffect(() => {
     async function loadUserData() {
@@ -69,6 +72,7 @@ export default function CreateQuizPage() {
 
     setIsLoading(true)
     setError(null)
+    setLoadingStage("Preparando dados")
 
     try {
       console.log("Submitting quiz form data...", {
@@ -82,6 +86,8 @@ export default function CreateQuizPage() {
       formData.append("parishId", parishId)
       formData.append("criadoPor", user.id as string)
 
+      setLoadingStage("Enviando para IA...")
+      
       // Enviar os dados via API regular para evitar timeout do Server Action
       const response = await fetch("/api/quizzes/create", {
         method: "POST",
@@ -93,10 +99,11 @@ export default function CreateQuizPage() {
         throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
       }
       
+      setLoadingStage("Processando resultado...")
       const result = await response.json();
       
       if (result.success) {
-        console.log("Quiz criado com sucesso, ID:", result.quizId)
+        console.log("Quiz criado com sucesso, ID:", result.quizId, "com", result.questionsCount, "questões")
         // Redireciona para a página de quizzes ativos após criar o quiz
         router.push("/quizzes?tab=ativos")
       } else {
@@ -110,6 +117,7 @@ export default function CreateQuizPage() {
         : "Falha ao criar quiz. Verifique sua conexão e tente novamente.")
     } finally {
       setIsLoading(false)
+      setLoadingStage("")
     }
   }
 
@@ -118,7 +126,10 @@ export default function CreateQuizPage() {
       <div className="container max-w-md mx-auto p-4">
         <Card>
           <CardHeader>
-            <CardTitle>Carregando...</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Loader2 className="animate-spin h-5 w-5" />
+              Carregando...
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -138,12 +149,16 @@ export default function CreateQuizPage() {
 
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 text-sm bg-red-100 border border-red-200 text-red-600 rounded-md">{error}</div>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Erro</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
 
             <div className="space-y-2">
               <Label htmlFor="titulo">Título do Quiz</Label>
-              <Input id="titulo" name="titulo" required />
+              <Input id="titulo" name="titulo" required disabled={isLoading} />
             </div>
 
             <div className="space-y-2">
@@ -153,6 +168,7 @@ export default function CreateQuizPage() {
                 name="descricao"
                 placeholder="Breve descrição do que este quiz aborda"
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -163,6 +179,7 @@ export default function CreateQuizPage() {
                 name="tema"
                 placeholder="Descrição detalhada do tópico de catecismo para gerar questões"
                 required
+                disabled={isLoading}
               />
               <p className="text-xs text-gray-500">
                 Forneça uma descrição detalhada do tópico de catecismo. Isso será usado para gerar as questões do quiz.
@@ -171,17 +188,28 @@ export default function CreateQuizPage() {
 
             <div className="space-y-2">
               <Label>Tipo de Quiz</Label>
-              <RadioGroup defaultValue={user.tipo || "adulto"} name="tipo">
+              <RadioGroup defaultValue={user.tipo || "adulto"} name="tipo" disabled={isLoading}>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="adulto" id="adulto" />
+                  <RadioGroupItem value="adulto" id="adulto" disabled={isLoading} />
                   <Label htmlFor="adulto">Catecismo para Adultos</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="crianca" id="crianca" />
+                  <RadioGroupItem value="crianca" id="crianca" disabled={isLoading} />
                   <Label htmlFor="crianca">Catecismo para Crianças</Label>
                 </div>
               </RadioGroup>
             </div>
+
+            {isLoading && (
+              <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                <AlertTitle>Criando seu quiz</AlertTitle>
+                <AlertDescription>
+                  {loadingStage || "Processando..."} 
+                  <p className="text-xs mt-1">Este processo pode levar até 60 segundos. Por favor, aguarde.</p>
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
 
           <CardFooter>
@@ -189,7 +217,8 @@ export default function CreateQuizPage() {
               type="submit" 
               className="w-full" 
               isLoading={isLoading} 
-              loadingText="Gerando Quiz (aguarde até 1 minuto)..."
+              loadingText="Gerando Quiz via IA..."
+              disabled={isLoading}
             >
               Criar Quiz
             </LoadingButton>

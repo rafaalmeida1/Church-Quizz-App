@@ -3,101 +3,66 @@ import { kv } from '@vercel/kv'
 import { getQuiz } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 
+/**
+ * API endpoint to handle quiz error notifications
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Para endpoints de processamento de erros, permitimos chamadas sem autenticação
-    // para que serviços de background possam reportar erros
-    const payload = await request.json()
-    const { message, quizId, adminKey } = payload
+    // Verify user is authenticated
+    const session = await getSession()
     
-    // Verificação de segurança básica para chamadas não autenticadas
-    const systemKey = process.env.ADMIN_API_KEY || 'default-system-key'
-    const isSystemCall = adminKey === systemKey
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Não autenticado" },
+        { status: 401 }
+      )
+    }
+
+    // Parse the request data
+    const data = await request.json()
+    const { quizId, questionId, errorDescription, reportedBy } = data
     
-    if (!message) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Mensagem de erro não fornecida" 
-      }, { status: 400 })
+    // Validate required fields
+    if (!quizId || !errorDescription) {
+      return NextResponse.json(
+        { success: false, error: "Campos obrigatórios: quizId e errorDescription" },
+        { status: 400 }
+      )
+    }
+
+    // Create error report object
+    const errorReport = {
+      id: `error:${Date.now()}`,
+      quizId,
+      questionId: questionId || null,
+      errorDescription,
+      reportedBy: reportedBy || session.user.id,
+      reportedAt: new Date().toISOString(),
+      status: "pending"
     }
     
-    let userId = null
+    // Store the error report
+    await kv.set(errorReport.id, JSON.stringify(errorReport))
     
-    // Se temos um quizId, buscamos o quiz para obter o userId do criador
-    if (quizId) {
-      // Verificamos se o ID tem o prefixo quiz: que é usado no sistema
-      const quizKey = quizId.startsWith('quiz:') ? quizId : `quiz:${quizId}`
-      
-      try {
-        const quiz = await getQuiz(quizKey)
-        
-        if (!quiz) {
-          return NextResponse.json({ 
-            success: false, 
-            error: "Quiz não encontrado" 
-          }, { status: 404 })
-        }
-        
-        userId = quiz.criadoPor
-        
-        // Verifica se obtivemos um userId válido
-        if (!userId) {
-          console.error("Quiz encontrado mas sem usuário criador:", quizKey)
-          return NextResponse.json({ 
-            success: false, 
-            error: "Não foi possível identificar o criador do quiz" 
-          }, { status: 400 })
-        }
-      } catch (error) {
-        console.error("Erro ao obter quiz:", error)
-        return NextResponse.json({ 
-          success: false, 
-          error: "Erro ao buscar informações do quiz" 
-        }, { status: 500 })
-      }
-    } else if (isSystemCall) {
-      // Para erros de sistema sem quizId específico
-      console.error("Erro de sistema sem quizId:", message)
-      
-      // Retorna sucesso mesmo sem salvar notificação, pois registramos o erro
-      return NextResponse.json({ 
-        success: true, 
-        message: "Erro registrado no sistema" 
-      })
-    } else {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Chamadas sem quizId exigem adminKey válida" 
-      }, { status: 401 })
-    }
+    // Add to list of error reports
+    await kv.lpush('quiz:error:reports', errorReport.id)
     
-    // Salvar na lista de notificações pendentes para o usuário
-    const notificationId = `error_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-    
-    await kv.lpush(`notifications:${userId}`, JSON.stringify({
-      type: "quiz_error",
-      quizId: quizId,
-      message: message,
-      timestamp: Date.now(),
-      read: false,
-      id: notificationId
-    }))
-    
-    // Manter apenas as 20 notificações mais recentes
-    await kv.ltrim(`notifications:${userId}`, 0, 19)
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: "Notificação de erro enviada com sucesso",
-      notificationId
+    // Return success response
+    return NextResponse.json({
+      success: true,
+      reportId: errorReport.id,
+      message: "Relatório de erro registrado com sucesso"
     })
     
   } catch (error) {
-    console.error("Erro ao processar notificação de erro:", error)
-    return NextResponse.json({ 
-      success: false, 
-      error: "Falha ao processar notificação de erro" 
-    }, { status: 500 })
+    console.error("[QUIZ ERROR] Erro:", error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Erro ao registrar problema" 
+      },
+      { status: 500 }
+    )
   }
 }
 

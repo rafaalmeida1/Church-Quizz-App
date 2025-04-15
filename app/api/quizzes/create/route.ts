@@ -16,92 +16,119 @@ function generateTemporaryQuestion(): Question {
   }
 }
 
+// Recebe os dados do quiz e cria um novo quiz
 export async function POST(request: NextRequest) {
   try {
-    // Verificar a autenticação
-    const { user, parishId } = await getSession()
+    // Verifica se o usuário está autenticado
+    const session = await getSession()
     
-    if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Usuário não autenticado" 
-      }, { status: 401 })
-    }
-    
-    if (!parishId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Usuário não está associado a uma paróquia" 
-      }, { status: 400 })
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Não autenticado" },
+        { status: 401 }
+      )
     }
 
-    // Processar o FormData
+    // Log para depuração
+    console.log(`[QUIZ CREATE] Iniciando criação de quiz por usuário: ${session.user.id}`)
+    
+    // Parse dos dados do formulário
     const formData = await request.formData()
     const titulo = formData.get("titulo") as string
     const descricao = formData.get("descricao") as string
     const tema = formData.get("tema") as string
-    const tipo = formData.get("tipo") as "adulto" | "crianca"
+    const tipo = formData.get("tipo") as string
+    const parishId = formData.get("parishId") as string
     const criadoPor = formData.get("criadoPor") as string
-
-    // Validar os dados
-    if (!titulo || !descricao || !tema || !tipo || !criadoPor) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Dados incompletos" 
-      }, { status: 400 })
-    }
-
-    try {
-      // Define a data de expiração para 7 dias a partir de agora
-      const expiraEm = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 dias em milissegundos
-
-      console.log(`Gerando questões para o tema: "${tema}" (${tipo})`)
-      
-      // Criamos o quiz com questões reais imediatamente em vez de usar placeholders
-      // Isso faz com que o usuário precise esperar um pouco mais pela resposta,
-      // mas garante que o quiz será criado com as questões corretas
-      const questoes = await generateQuizQuestions(tema, tipo)
-      
-      console.log(`Questões geradas com sucesso (${questoes.length}) para quiz de tema "${tema}"`)
-      
-      // Criar o quiz com as questões reais
-      const quiz: Quiz = {
-        titulo,
-        descricao,
-        tema,
-        tipo,
-        parishId,
-        criadoPor,
-        questoes: questoes,
-        criadoEm: Date.now(),
-        expiraEm: expiraEm,
-        status: "pendente", // Status ativo, já pronto para uso
-        pontuacaoMaxima: questoes.length * 10 // 10 pontos por questão
-      }
-  
-      // Salvar o quiz com as questões reais
-      const quizId = await createQuiz(quiz)
-      
-      console.log(`Quiz ${quizId} criado com sucesso`)
-      
-      // Retornar sucesso imediatamente
-      return NextResponse.json({ 
-        success: true, 
-        quizId, 
-        message: "Quiz criado com sucesso!"
+    
+    // Validações
+    if (!titulo || !descricao || !tema || !tipo || !parishId || !criadoPor) {
+      console.log("[QUIZ CREATE] Dados incompletos:", {
+        titulo, descricao, tema, tipo, parishId, criadoPor
       })
-    } catch (genError: any) {
-      console.error("Erro ao gerar questões:", genError)
-      return NextResponse.json({ 
-        success: false, 
-        error: `Falha ao gerar o quiz: ${genError.message || "Erro desconhecido"}` 
-      }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: "Todos os campos são obrigatórios" },
+        { status: 400 }
+      )
     }
-  } catch (error: any) {
-    console.error("Erro ao criar quiz:", error)
-    return NextResponse.json({ 
-      success: false, 
-      error: `Falha ao criar quiz: ${error.message || "Erro desconhecido"}` 
-    }, { status: 500 })
+
+    // Verifica se o usuário tem permissão para criar quiz nesta paróquia
+    if (tipo === "crianca" && !["admin", "catequista"].includes(session.user.tipo || "")) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Apenas catequistas e administradores podem criar quizzes para crianças" 
+        },
+        { status: 403 }
+      )
+    }
+
+    // Gerar um ID para o quiz
+    const quizId = `quiz:${Date.now()}`
+    
+    console.log(`[QUIZ CREATE] Gerando questões para o quiz ID: ${quizId}`)
+    
+    // Verificar se o tema está definido
+    if (!tema) {
+      return NextResponse.json(
+        { error: "O tema do quiz é obrigatório" },
+        { status: 400 }
+      )
+    }
+    
+    // Gerar as questões diretamente usando a IA
+    const questoes = await generateQuizQuestions(
+      tema,
+      tipo as "crianca" | "adulto"
+    )
+    
+    // Verificar se as questões foram geradas corretamente
+    if (!questoes || questoes.length === 0) {
+      console.error(`[QUIZ CREATE] Falha ao gerar questões para o quiz ID: ${quizId}`)
+      throw new Error("Não foi possível gerar questões para este quiz. Tente um tema mais específico.")
+    }
+    
+    console.log(`[QUIZ CREATE] Geradas ${questoes.length} questões para o quiz ID: ${quizId}`)
+    
+    // Criar o objeto quiz
+    const quiz = {
+      id: quizId,
+      titulo,
+      descricao,
+      tema,
+      tipo,
+      parishId,
+      criadoPor,
+      criadoEm: new Date().toISOString(),
+      status: "ativo", // Status ativo, pronto para uso imediato
+      questoes
+    }
+    
+    // Salvar o quiz no KV
+    await kv.set(quizId, JSON.stringify(quiz))
+    
+    // Adicionar o id do quiz à lista de quizzes da paróquia
+    const parishQuizzesKey = `parish:${parishId}:quizzes`
+    await kv.sadd(parishQuizzesKey, quizId)
+    
+    console.log(`[QUIZ CREATE] Quiz criado com sucesso: ${quizId}`)
+    
+    // Resposta de sucesso
+    return NextResponse.json({
+      success: true,
+      quizId,
+      questionsCount: questoes.length,
+      message: `Quiz criado com sucesso com ${questoes.length} questões!`
+    })
+    
+  } catch (error) {
+    console.error("[QUIZ CREATE] Erro:", error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Erro ao criar quiz" 
+      },
+      { status: 500 }
+    )
   }
 } 

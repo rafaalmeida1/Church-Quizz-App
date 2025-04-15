@@ -9,51 +9,29 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Verificar autenticação
-    const { user } = await getSession()
+    const quizId = params.id.startsWith('quiz:') ? params.id : `quiz:${params.id}`
     
-    if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Usuário não autenticado" 
-      }, { status: 401 })
+    // Retrieve quiz from KV store
+    const quizData = await kv.get(quizId)
+    
+    if (!quizData) {
+      return NextResponse.json(
+        { success: false, error: "Quiz não encontrado" },
+        { status: 404 }
+      )
     }
     
-    const quizId = params.id
-    
-    // Buscar o quiz
-    const quiz = await getQuiz(quizId)
-    
-    if (!quiz) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Quiz não encontrado" 
-      }, { status: 404 })
-    }
-    
-    // Verificar permissão (apenas o criador ou alguém da mesma paróquia pode ver)
-    if (quiz.criadoPor !== user.id && quiz.parishId !== user.parishId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Sem permissão para acessar este quiz" 
-      }, { status: 403 })
-    }
-    
-    // Retornar os dados do quiz
-    return NextResponse.json({ 
-      success: true, 
-      quiz: {
-        ...quiz,
-        id: quizId
-      }
+    return NextResponse.json({
+      success: true,
+      quiz: quizData
     })
     
   } catch (error) {
-    console.error("Erro ao obter quiz:", error)
-    return NextResponse.json({ 
-      success: false, 
-      error: "Falha ao obter informações do quiz" 
-    }, { status: 500 })
+    console.error("[QUIZ GET] Erro:", error)
+    return NextResponse.json(
+      { success: false, error: "Erro ao buscar quiz" },
+      { status: 500 }
+    )
   }
 }
 
@@ -135,53 +113,64 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Verificar autenticação
-    const { user } = await getSession()
+    // Authenticate user
+    const session = await getSession()
     
-    if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Usuário não autenticado" 
-      }, { status: 401 })
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Não autenticado" },
+        { status: 401 }
+      )
     }
     
-    const quizId = params.id
+    // Format quiz ID
+    const quizId = params.id.startsWith('quiz:') ? params.id : `quiz:${params.id}`
     
-    // Buscar o quiz existente
-    const quiz = await getQuiz(quizId)
+    // Get quiz data
+    const quizData = await kv.get(quizId)
     
-    if (!quiz) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Quiz não encontrado" 
-      }, { status: 404 })
+    if (!quizData) {
+      return NextResponse.json(
+        { success: false, error: "Quiz não encontrado" },
+        { status: 404 }
+      )
     }
     
-    // Verificar permissão (apenas o criador pode excluir)
-    if (quiz.criadoPor !== user.id && user.role !== 'admin') {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Sem permissão para excluir este quiz" 
-      }, { status: 403 })
+    const quiz = typeof quizData === 'string' ? JSON.parse(quizData) : quizData
+    
+    // Check if user has permission (creator, admin, or proper role)
+    const isCreator = quiz.criadoPor === session.user.id
+    const isAdmin = session.user.role === 'admin'
+    
+    if (!isCreator && !isAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Sem permissão para apagar este quiz" },
+        { status: 403 }
+      )
     }
     
-    // Remover o quiz dos conjuntos
-    await kv.srem(`parish:${quiz.parishId}:quizzes`, quizId)
+    // Remove quiz from parish list
+    if (quiz.parishId) {
+      const parishQuizzesKey = `parish:${quiz.parishId}:quizzes`
+      await kv.srem(parishQuizzesKey, quizId)
+    }
     
-    // Excluir o quiz
+    // Delete the quiz
     await kv.del(quizId)
     
-    // Retornar sucesso
-    return NextResponse.json({ 
-      success: true, 
-      message: "Quiz excluído com sucesso"
+    return NextResponse.json({
+      success: true,
+      message: "Quiz apagado com sucesso"
     })
     
   } catch (error) {
-    console.error("Erro ao excluir quiz:", error)
-    return NextResponse.json({ 
-      success: false, 
-      error: "Falha ao excluir quiz" 
-    }, { status: 500 })
+    console.error("[QUIZ DELETE] Erro:", error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Erro ao apagar quiz" 
+      },
+      { status: 500 }
+    )
   }
 } 
