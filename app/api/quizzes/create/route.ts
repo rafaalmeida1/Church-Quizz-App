@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         questoes: questoes,
         criadoEm: Date.now(),
         expiraEm: expiraEm,
-        status: "ativo", // Status ativo, já pronto para uso
+        status: "pendente", // Status ativo, já pronto para uso
         pontuacaoMaxima: questoes.length * 10 // 10 pontos por questão
       }
   

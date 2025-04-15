@@ -1,82 +1,27 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
 import { getQuiz } from '@/lib/db'
-import { getSessionData } from "@/app/actions"
-import { getSession } from "@/lib/auth"
-import { kv } from "@vercel/kv"
+import { kv } from '@vercel/kv'
 
+// GET endpoint para obter informações do quiz
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Extrair e decodificar o ID do quiz
-    const quizId = decodeURIComponent(params.id)
-    
-    // Validar o ID do quiz
-    if (!quizId || quizId === 'create' || quizId === 'undefined') {
-      console.error("ID de quiz inválido:", quizId)
-      return NextResponse.json(
-        { success: false, error: "ID de quiz inválido" },
-        { status: 400 }
-      )
-    }
-
-    // Buscar o quiz do banco de dados
-    const quiz = await getQuiz(quizId)
-
-    if (!quiz) {
-      console.error("Quiz não encontrado com ID:", quizId)
-      return NextResponse.json(
-        { success: false, error: "Quiz não encontrado" },
-        { status: 404 }
-      )
-    }
-
-    // Retorna os dados do quiz
-    return NextResponse.json({ 
-      success: true, 
-      quiz: {
-        ...quiz,
-        id: quizId
-      }
-    })
-  } catch (error) {
-    console.error("Erro ao buscar quiz:", error)
-    return NextResponse.json(
-      { success: false, error: "Erro ao buscar quiz" },
-      { status: 500 }
-    )
-  }
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // Verificar a autenticação
+    // Verificar autenticação
     const { user } = await getSession()
     
-    if (!user || (user.role !== "admin" && user.role !== "catequista")) {
+    if (!user) {
       return NextResponse.json({ 
         success: false, 
-        error: "Sem permissão para excluir quizzes" 
-      }, { status: 403 })
+        error: "Usuário não autenticado" 
+      }, { status: 401 })
     }
     
-    // Extrair e decodificar o ID do quiz
-    const quizId = decodeURIComponent(params.id)
+    const quizId = params.id
     
-    // Validar o ID do quiz
-    if (!quizId || quizId === 'create' || quizId === 'undefined') {
-      console.error("ID de quiz inválido:", quizId)
-      return NextResponse.json(
-        { success: false, error: "ID de quiz inválido" },
-        { status: 400 }
-      )
-    }
-    
-    // Buscar o quiz para verificar se existe
+    // Buscar o quiz
     const quiz = await getQuiz(quizId)
     
     if (!quiz) {
@@ -86,23 +31,150 @@ export async function DELETE(
       }, { status: 404 })
     }
     
-    // Verificar permissão para excluir (apenas o criador ou admin)
-    if (user.role !== "admin" && quiz.criadoPor !== user.id) {
+    // Verificar permissão (apenas o criador ou alguém da mesma paróquia pode ver)
+    if (quiz.criadoPor !== user.id && quiz.parishId !== user.parishId) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Sem permissão para acessar este quiz" 
+      }, { status: 403 })
+    }
+    
+    // Retornar os dados do quiz
+    return NextResponse.json({ 
+      success: true, 
+      quiz: {
+        ...quiz,
+        id: quizId
+      }
+    })
+    
+  } catch (error) {
+    console.error("Erro ao obter quiz:", error)
+    return NextResponse.json({ 
+      success: false, 
+      error: "Falha ao obter informações do quiz" 
+    }, { status: 500 })
+  }
+}
+
+// PATCH endpoint para atualizar informações do quiz
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Verificar autenticação
+    const { user } = await getSession()
+    
+    if (!user) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Usuário não autenticado" 
+      }, { status: 401 })
+    }
+    
+    const quizId = params.id
+    
+    // Buscar o quiz existente
+    const quiz = await getQuiz(quizId)
+    
+    if (!quiz) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Quiz não encontrado" 
+      }, { status: 404 })
+    }
+    
+    // Verificar permissão (apenas o criador pode editar)
+    if (quiz.criadoPor !== user.id) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Sem permissão para editar este quiz" 
+      }, { status: 403 })
+    }
+    
+    // Obter os dados da requisição
+    const data = await request.json()
+    const { titulo, descricao, tipo } = data
+    
+    // Validar os dados
+    if (!titulo || !descricao || !tipo) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Dados incompletos" 
+      }, { status: 400 })
+    }
+    
+    // Atualizar o quiz
+    const updatedFields = {
+      titulo,
+      descricao,
+      tipo
+    }
+    
+    await kv.hset(quizId, updatedFields)
+    
+    // Retornar sucesso
+    return NextResponse.json({ 
+      success: true, 
+      message: "Quiz atualizado com sucesso"
+    })
+    
+  } catch (error) {
+    console.error("Erro ao atualizar quiz:", error)
+    return NextResponse.json({ 
+      success: false, 
+      error: "Falha ao atualizar quiz" 
+    }, { status: 500 })
+  }
+}
+
+// DELETE endpoint para excluir um quiz
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Verificar autenticação
+    const { user } = await getSession()
+    
+    if (!user) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Usuário não autenticado" 
+      }, { status: 401 })
+    }
+    
+    const quizId = params.id
+    
+    // Buscar o quiz existente
+    const quiz = await getQuiz(quizId)
+    
+    if (!quiz) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Quiz não encontrado" 
+      }, { status: 404 })
+    }
+    
+    // Verificar permissão (apenas o criador pode excluir)
+    if (quiz.criadoPor !== user.id && user.role !== 'admin') {
       return NextResponse.json({ 
         success: false, 
         error: "Sem permissão para excluir este quiz" 
       }, { status: 403 })
     }
     
-    // Excluir o quiz do Redis
-    await kv.del(quizId)
-    
-    // Remover o quiz da lista de quizzes da paróquia
+    // Remover o quiz dos conjuntos
     await kv.srem(`parish:${quiz.parishId}:quizzes`, quizId)
     
+    // Excluir o quiz
+    await kv.del(quizId)
+    
+    // Retornar sucesso
     return NextResponse.json({ 
       success: true, 
-      message: "Quiz excluído com sucesso" 
+      message: "Quiz excluído com sucesso"
     })
     
   } catch (error) {
