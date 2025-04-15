@@ -14,7 +14,7 @@ import { User, Parish, Quiz } from "@/lib/types"
 
 interface QuizzesClientProps {
   user: User;
-  parish: Parish;
+  parish: Parish | null;
   activeQuizzes: Quiz[];
   pendingQuizzes: Quiz[];
   generatingQuizzes: Quiz[];
@@ -48,6 +48,9 @@ export default function QuizzesClient({
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
   const [checkingStatus, setCheckingStatus] = useState<string[]>([]);
   const [refreshCount, setRefreshCount] = useState(0);
+  
+  // Segurança para caso parish seja null
+  const parishName = parish?.nome || "Sua Paróquia";
   
   // Verificar status periodicamente se houver quizzes em geração
   useEffect(() => {
