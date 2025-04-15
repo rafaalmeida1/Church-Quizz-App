@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const parishQuizzesKey = `parish:${parishId}:quizzes`
     const quizIds = await kv.smembers(parishQuizzesKey) || []
     
-    if (!quizIds || quizIds.length === 0) {
+    if (!quizIds || quizIds?.length === 0) {
       return NextResponse.json({
         success: true,
         quizzes: []
