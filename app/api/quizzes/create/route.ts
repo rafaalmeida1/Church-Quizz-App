@@ -77,10 +77,22 @@ export async function POST(request: NextRequest) {
     }
     
     // Gerar as questões diretamente usando a IA
-    const questoes = await generateQuizQuestions(
-      tema,
-      tipo as "crianca" | "adulto"
-    )
+    let questoes = [];
+    try {
+      questoes = await generateQuizQuestions(
+        tema,
+        tipo as "crianca" | "adulto"
+      ) || [];
+    } catch (questionsError) {
+      console.error(`[QUIZ CREATE] Erro ao gerar questões:`, questionsError);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Falha ao gerar questões. Por favor, tente novamente com um tema mais específico." 
+        },
+        { status: 500 }
+      );
+    }
     
     // Verificar se as questões foram geradas corretamente
     if (!questoes || questoes.length === 0) {

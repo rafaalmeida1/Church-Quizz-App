@@ -237,61 +237,238 @@ export async function createQuiz(quizData: Quiz): Promise<string> {
   }
 }
 
+export async function repairQuiz(quizId: string): Promise<boolean> {
+  try {
+    if (!quizId) return false;
+    
+    console.log(`Attempting to repair quiz: ${quizId}`);
+    
+    // Get the raw quiz data without processing
+    const rawQuiz = await kv.hgetall(quizId);
+    
+    if (!rawQuiz || Object.keys(rawQuiz).length === 0) {
+      console.log(`Quiz not found or empty: ${quizId}`);
+      return false;
+    }
+    
+    // Create a clean quiz object with valid structure
+    const cleanQuiz: Record<string, any> = {
+      id: quizId,
+      titulo: rawQuiz.titulo || "Quiz sem título",
+      descricao: rawQuiz.descricao || "Sem descrição",
+      tema: rawQuiz.tema || "Tema não especificado",
+      tipo: rawQuiz.tipo || "adulto",
+      parishId: rawQuiz.parishId || "",
+      criadoPor: rawQuiz.criadoPor || "",
+      criadoEm: rawQuiz.criadoEm || Date.now().toString(),
+      status: rawQuiz.status || "encerrado",
+      questoes: [],
+    };
+    
+    // Try to parse questoes if it exists
+    if (rawQuiz.questoes) {
+      try {
+        // Check if questoes is already an object or a string that needs parsing
+        const questoesData = typeof rawQuiz.questoes === 'string' 
+          ? JSON.parse(rawQuiz.questoes) 
+          : rawQuiz.questoes;
+        
+        if (Array.isArray(questoesData)) {
+          cleanQuiz.questoes = questoesData;
+        } else {
+          cleanQuiz.questoes = [];
+        }
+      } catch (e) {
+        console.error(`Failed to parse questoes for quiz ${quizId}:`, e);
+        cleanQuiz.questoes = [];
+      }
+    }
+    
+    // Add expiraEm if missing
+    if (!rawQuiz.expiraEm) {
+      // Set to 7 days from creation date or now if not available
+      const creationDate = parseInt(cleanQuiz.criadoEm) || Date.now();
+      cleanQuiz.expiraEm = (creationDate + 7 * 24 * 60 * 60 * 1000).toString();
+    } else {
+      cleanQuiz.expiraEm = rawQuiz.expiraEm;
+    }
+    
+    // Prepare data for storage (convert objects to JSON strings)
+    const serializedQuiz: Record<string, string> = {};
+    Object.entries(cleanQuiz).forEach(([key, value]) => {
+      if (value !== undefined) {
+        if (typeof value === "object") {
+          serializedQuiz[key] = JSON.stringify(value);
+        } else {
+          serializedQuiz[key] = String(value);
+        }
+      }
+    });
+    
+    // Delete the old quiz data
+    await kv.del(String(quizId));
+    
+    // Store the repaired data
+    await kv.hset(quizId, serializedQuiz);
+    
+    console.log(`Successfully repaired quiz: ${quizId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error repairing quiz ${quizId}:`, error);
+    return false;
+  }
+}
+
 export async function getQuiz(id: string): Promise<Quiz | null> {
   try {
-    const quiz = await kv.hgetall(id)
+    if (!id) {
+      console.warn("getQuiz: id is undefined or empty");
+      return null;
+    }
 
-    if (!quiz) return null
-
-    // Converte valores de string de volta para seus tipos originais
-    const parsedQuiz: Record<string, any> = {}
-
-    Object.entries(quiz).forEach(([key, value]) => {
-      if (typeof value === "string") {
+    // Try to get quiz data
+    let quiz;
+    let repaired = false;
+    
+    try {
+      quiz = await kv.hgetall(id);
+    } catch (fetchError) {
+      console.error(`Error fetching quiz ${id}:`, fetchError);
+      
+      // Try to repair the quiz
+      const repairSuccess = await repairQuiz(id);
+      if (repairSuccess) {
+        repaired = true;
+        // Try fetching again after repair
         try {
-          // Tenta analisar strings JSON de volta para objetos/arrays
-          parsedQuiz[key] = JSON.parse(value)
-        } catch {
-          // Se não for JSON, mantém como está
-          parsedQuiz[key] = value
+          quiz = await kv.hgetall(id);
+        } catch (secondError) {
+          console.error(`Failed to fetch quiz ${id} even after repair:`, secondError);
+          return null;
         }
       } else {
-        parsedQuiz[key] = value
+        return null;
       }
-    })
+    }
 
-    return { ...parsedQuiz, id } as Quiz
+    if (!quiz || Object.keys(quiz).length === 0) {
+      // If not already tried, attempt to repair
+      if (!repaired) {
+        const repairSuccess = await repairQuiz(id);
+        if (repairSuccess) {
+          // Try fetching again after repair
+          try {
+            quiz = await kv.hgetall(id);
+            if (!quiz || Object.keys(quiz).length === 0) {
+              return null;
+            }
+          } catch (error) {
+            console.error(`Failed to fetch quiz ${id} after repair:`, error);
+            return null;
+          }
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+
+    // Convert values safely
+    const parsedQuiz: Record<string, any> = {
+      id: id,
+      titulo: quiz.titulo || "Quiz sem título",
+      status: quiz.status || "encerrado",
+    };
+
+    // Process each field carefully
+    Object.entries(quiz).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      
+      if (typeof value === "string") {
+        try {
+          // Try to parse as JSON
+          parsedQuiz[key] = JSON.parse(value);
+        } catch {
+          // Keep as string if not JSON
+          parsedQuiz[key] = value;
+        }
+      } else {
+        parsedQuiz[key] = value;
+      }
+    });
+
+    // Ensure we have required fields with defaults
+    if (!parsedQuiz.questoes) parsedQuiz.questoes = [];
+    if (!parsedQuiz.expiraEm) {
+      const creationDate = parseInt(parsedQuiz.criadoEm) || Date.now();
+      parsedQuiz.expiraEm = creationDate + 7 * 24 * 60 * 60 * 1000;
+    } else if (typeof parsedQuiz.expiraEm === 'string') {
+      parsedQuiz.expiraEm = parseInt(parsedQuiz.expiraEm);
+    }
+
+    return parsedQuiz as Quiz;
   } catch (error) {
-    console.error("Erro ao obter quiz:", error)
-    return null
+    console.error("Error in getQuiz:", error, "ID:", id);
+    return null;
   }
 }
 
 export async function getParishQuizzes(parishId: string): Promise<Quiz[]> {
   try {
-    const quizIds = await kv.smembers(`parish:${parishId}:quizzes`)
+    if (!parishId) {
+      console.warn("getParishQuizzes: parishId is undefined or empty");
+      return [];
+    }
+    
+    const quizIds = await kv.smembers(`parish:${parishId}:quizzes`) || [];
+    
+    if (!quizIds || quizIds.length === 0) {
+      return [];
+    }
 
     const quizzes = await Promise.all(
       quizIds.map(async (id) => {
-        const quiz = await getQuiz(id)
-        return quiz ? { ...quiz, id } : null
-      }),
-    )
+        try {
+          if (!id) return null;
+          
+          const quiz = await getQuiz(id);
+          return quiz ? { ...quiz, id } : null;
+        } catch (error) {
+          console.error("Erro ao processar quiz individual:", error, "ID:", id);
+          return null;
+        }
+      })
+    );
 
-    return quizzes.filter(Boolean) as Quiz[]
+    return quizzes.filter(Boolean) as Quiz[];
   } catch (error) {
-    console.error("Erro ao obter quizzes da paróquia:", error)
-    return []
+    console.error("Erro ao obter quizzes da paróquia:", error, "ParishID:", parishId);
+    return [];
   }
 }
 
 export async function getQuizzesByType(parishId: string, tipo: "adulto" | "crianca"): Promise<Quiz[]> {
   try {
-    const quizzes = await getParishQuizzes(parishId)
-    return quizzes.filter((quiz) => quiz.tipo === tipo)
+    if (!parishId) {
+      console.warn("getQuizzesByType: parishId is undefined or empty");
+      return [];
+    }
+    
+    const quizzes = await getParishQuizzes(parishId);
+    
+    if (!quizzes || !Array.isArray(quizzes)) {
+      console.warn("getQuizzesByType: quizzes is not an array", quizzes);
+      return [];
+    }
+    
+    return quizzes.filter((quiz) => {
+      if (!quiz) return false;
+      return quiz.tipo === tipo;
+    });
   } catch (error) {
-    console.error(`Erro ao obter quizzes do tipo ${tipo}:`, error)
-    return []
+    console.error(`Erro ao obter quizzes do tipo ${tipo}:`, error, "ParishID:", parishId);
+    return [];
   }
 }
 
@@ -371,39 +548,65 @@ export async function getUserQuizResponses(userId: string): Promise<QuizResponse
 
 export async function getQuizResponses(quizId: string): Promise<QuizResponse[]> {
   try {
-    const responseIds = await kv.smembers(`quiz:${quizId}:responses`)
-
-    const responses = await Promise.all(
-      responseIds.map(async (id) => {
-        const response = await kv.hgetall(id)
-
-        if (!response) return null
-
-        // Converte valores de string de volta para seus tipos originais
-        const parsedResponse: Record<string, any> = {}
-
-        Object.entries(response).forEach(([key, value]) => {
-          if (typeof value === "string") {
-            try {
-              // Tenta analisar strings JSON de volta para objetos/arrays
-              parsedResponse[key] = JSON.parse(value)
-            } catch {
-              // Se não for JSON, mantém como está
-              parsedResponse[key] = value
+    if (!quizId) {
+      console.warn("getQuizResponses: quizId is undefined or empty");
+      return [];
+    }
+    
+    const formattedQuizId = quizId.startsWith('quiz:') ? quizId : `quiz:${quizId}`;
+    
+    try {
+      const responseIds = await kv.smembers(`${formattedQuizId}:responses`);
+      
+      if (!responseIds || !Array.isArray(responseIds) || responseIds.length === 0) {
+        console.log(`No responses found for quiz: ${formattedQuizId}`);
+        return [];
+      }
+      
+      // Safe mapping with null/undefined checks
+      const responsesPromises = responseIds.map(async (id) => {
+        if (!id) return null;
+        
+        try {
+          const response = await kv.hgetall(id);
+          if (!response || Object.keys(response).length === 0) return null;
+          
+          // Safe conversion of values
+          const parsedResponse: Record<string, any> = {};
+          
+          Object.entries(response).forEach(([key, value]) => {
+            if (value === null || value === undefined) return;
+            
+            if (typeof value === "string") {
+              try {
+                parsedResponse[key] = JSON.parse(value);
+              } catch {
+                parsedResponse[key] = value;
+              }
+            } else {
+              parsedResponse[key] = value;
             }
-          } else {
-            parsedResponse[key] = value
-          }
-        })
-
-        return { ...parsedResponse, id } as QuizResponse
-      }),
-    )
-
-    return responses.filter(Boolean) as QuizResponse[]
+          });
+          
+          return { ...parsedResponse, id } as QuizResponse;
+        } catch (responseError) {
+          console.error("Error processing response:", responseError, "ID:", id);
+          return null;
+        }
+      });
+      
+      // Handle Promise.all safely
+      const responses = await Promise.all(responsesPromises || []);
+      
+      // Filter out null/undefined values
+      return (responses || []).filter(Boolean) as QuizResponse[];
+    } catch (innerError) {
+      console.error("Error getting response IDs:", innerError, "QuizID:", quizId);
+      return [];
+    }
   } catch (error) {
-    console.error("Erro ao obter respostas do quiz:", error)
-    return []
+    console.error("Error in getQuizResponses:", error, "QuizID:", quizId);
+    return [];
   }
 }
 
@@ -569,23 +772,109 @@ export async function getPendingQuizzesForUser(userId: string): Promise<Quiz[]> 
 
 export async function updateExpiredQuizzes(parishId: string): Promise<void> {
   try {
-    const parishQuizzes = await getParishQuizzes(parishId)
-    const now = Date.now()
+    if (!parishId) {
+      console.warn("updateExpiredQuizzes: parishId is undefined or empty");
+      return;
+    }
+    
+    const parishQuizzes = await getParishQuizzes(parishId);
+    
+    if (!parishQuizzes || !Array.isArray(parishQuizzes) || parishQuizzes.length === 0) {
+      console.log(`No quizzes found for parish: ${parishId}`);
+      return;
+    }
+    
+    const now = Date.now();
     
     // Identifica quizzes expirados que ainda não estão com status "encerrado"
     const expiredQuizzes = parishQuizzes.filter(quiz => 
-      quiz.expiraEm < now && quiz.status !== "encerrado"
-    )
+      quiz && quiz.expiraEm && quiz.expiraEm < now && quiz.status !== "encerrado"
+    );
+    
+    if (!expiredQuizzes || expiredQuizzes.length === 0) {
+      console.log(`No expired quizzes to update for parish: ${parishId}`);
+      return;
+    }
     
     // Atualiza o status dos quizzes expirados para "encerrado"
     for (const quiz of expiredQuizzes) {
-      if (quiz.id) {
-        await kv.hset(quiz.id, { status: "encerrado" })
+      if (quiz && quiz.id) {
+        try {
+          await kv.hset(quiz.id, { status: "encerrado" });
+        } catch (updateError) {
+          console.error(`Error updating expired quiz: ${quiz.id}`, updateError);
+        }
       }
     }
     
-    console.log(`Atualizados ${expiredQuizzes.length} quizzes expirados para a paróquia ${parishId}`)
+    console.log(`Updated ${expiredQuizzes.length} expired quizzes for parish: ${parishId}`);
   } catch (error) {
-    console.error("Erro ao atualizar quizzes expirados:", error)
+    console.error("Error updating expired quizzes:", error, "ParishID:", parishId);
+  }
+}
+
+export async function repairParishQuizzes(parishId: string): Promise<{total: number, repaired: number, failed: number}> {
+  try {
+    console.log(`Starting repair of all quizzes for parish: ${parishId}`);
+    
+    if (!parishId) {
+      console.warn("repairParishQuizzes: parishId is undefined or empty");
+      return { total: 0, repaired: 0, failed: 0 };
+    }
+    
+    const quizIds = await kv.smembers(`parish:${parishId}:quizzes`) || [];
+    
+    if (!quizIds || !Array.isArray(quizIds) || quizIds.length === 0) {
+      console.log(`No quizzes found for parish: ${parishId}`);
+      return { total: 0, repaired: 0, failed: 0 };
+    }
+    
+    console.log(`Found ${quizIds.length} quizzes to check for parish: ${parishId}`);
+    
+    let repaired = 0;
+    let failed = 0;
+    
+    // Process quizzes one by one to avoid overwhelming the KV store
+    for (const quizId of quizIds) {
+      try {
+        // Try to get quiz first to see if it needs repair
+        let needsRepair = false;
+        try {
+          const quiz = await kv.hgetall(quizId);
+          if (!quiz || Object.keys(quiz).length === 0) {
+            needsRepair = true;
+          } else if (!quiz.questoes || !quiz.expiraEm) {
+            needsRepair = true;
+          }
+        } catch (error) {
+          needsRepair = true;
+        }
+        
+        if (needsRepair) {
+          console.log(`Quiz ${quizId} needs repair, attempting...`);
+          const success = await repairQuiz(quizId);
+          if (success) {
+            repaired++;
+            console.log(`Quiz ${quizId} repaired successfully`);
+          } else {
+            failed++;
+            console.error(`Failed to repair quiz ${quizId}`);
+          }
+        }
+      } catch (error) {
+        failed++;
+        console.error(`Error processing quiz ${quizId}:`, error);
+      }
+    }
+    
+    console.log(`Parish ${parishId} repair complete: ${repaired} repaired, ${failed} failed, ${quizIds.length} total`);
+    return {
+      total: quizIds.length,
+      repaired,
+      failed
+    };
+  } catch (error) {
+    console.error(`Error repairing parish quizzes:`, error, "ParishID:", parishId);
+    return { total: 0, repaired: 0, failed: 0 };
   }
 }

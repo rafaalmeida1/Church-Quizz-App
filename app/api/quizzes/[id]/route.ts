@@ -176,11 +176,13 @@ export async function DELETE(
     
     const quiz = typeof quizData === 'string' ? JSON.parse(quizData) : quizData
     
-    // Check if user has permission (creator, admin, or proper role)
-    const isCreator = quiz.criadoPor === session.user.id
+    // Verify tenant isolation - user must be from the same parish
+    const isFromSameParish = quiz.parishId === session.user.parishId
     const isAdmin = session.user.role === 'admin'
+    const isCreator = quiz.criadoPor === session.user.id
     
-    if (!isCreator && !isAdmin) {
+    // Check if user has permission (creator from same parish or admin)
+    if ((!isCreator || !isFromSameParish) && !isAdmin) {
       return NextResponse.json(
         { success: false, error: "Sem permissão para apagar este quiz" },
         { status: 403 }
