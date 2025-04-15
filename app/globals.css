@@ -1,0 +1,670 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tema inspirado no Duolingo com elementos católicos */
+    --background: 210 50% 98%;
+    --foreground: 225 25% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 225 25% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 25% 20%;
+    
+    /* Cores principais - Inspiradas em vitrais e Duolingo */
+    --primary: 220 80% 50%;      /* Azul vibrante (Maria) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 355 85% 60%;    /* Vermelho vibrante (Espírito Santo) */
+    --secondary-foreground: 0 0% 100%;
+    --accent: 45 100% 50%;       /* Dourado vibrante (Santidade) */
+    --accent-foreground: 225 25% 20%;
+    
+    /* Cores Duolingo-like para gamificação */
+    --success: 145 65% 42%;      /* Verde Duolingo para acertos */
+    --success-foreground: 0 0% 100%;
+    --warning: 35 100% 50%;      /* Laranja para atenção */
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 90% 60%;    /* Vermelho para erros */
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Cores complementares */
+    --muted: 220 20% 94%;
+    --muted-foreground: 225 10% 45%;
+    
+    /* Bordas e elementos */
+    --border: 220 25% 90%;
+    --input: 220 25% 90%;
+    --ring: 220 80% 50%;
+    
+    /* Bordas arredondadas - mais como Duolingo */
+    --radius: 1rem;
+    
+    /* Cores para o menu lateral */
+    --sidebar-background: 220 30% 20%;
+    --sidebar-foreground: 220 10% 95%;
+    --sidebar-primary: 45 100% 50%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 220 20% 30%;
+    --sidebar-accent-foreground: 220 10% 95%;
+    --sidebar-border: 220 30% 25%;
+    --sidebar-ring: 220 80% 50%;
+  }
+
+  .dark {
+    /* Tema escuro inspirado em Duolingo noturno */
+    --background: 225 30% 12%;
+    --foreground: 220 40% 92%;
+    --card: 225 25% 16%;
+    --card-foreground: 220 40% 92%;
+    --popover: 225 25% 16%;
+    --popover-foreground: 220 40% 92%;
+    
+    /* Cores principais no tema escuro */
+    --primary: 220 70% 55%;       /* Azul mais intenso */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 355 70% 55%;     /* Vermelho mais profundo */
+    --secondary-foreground: 0 0% 100%;
+    --accent: 45 90% 55%;         /* Dourado mais suave */
+    --accent-foreground: 0 0% 0%;
+    
+    /* Cores para gamificação em modo escuro */
+    --success: 145 60% 38%;      /* Verde escuro para acertos */
+    --success-foreground: 0 0% 100%;
+    --warning: 35 90% 45%;       /* Laranja escuro */
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 70% 50%;    /* Vermelho escuro */
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Cores complementares */
+    --muted: 225 25% 22%;
+    --muted-foreground: 220 10% 75%;
+    
+    /* Bordas e elementos */
+    --border: 225 25% 25%;
+    --input: 225 25% 25%;
+    --ring: 220 70% 55%;
+    
+    /* Cores para o menu lateral */
+    --sidebar-background: 225 35% 10%;
+    --sidebar-foreground: 220 10% 90%;
+    --sidebar-primary: 45 85% 50%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 225 25% 20%;
+    --sidebar-accent-foreground: 220 10% 90%;
+    --sidebar-border: 225 35% 15%;
+    --sidebar-ring: 220 70% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Montserrat', sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cinzel', serif;
+    @apply font-semibold tracking-tight;
+  }
+  
+  /* Estilizando links */
+  a {
+    @apply transition-colors duration-200;
+  }
+
+  /* Melhorias para mobile */
+  @media (max-width: 768px) {
+    button, .button, a.button {
+      @apply px-3 py-2 text-sm;
+    }
+    
+    h1 {
+      @apply text-2xl;
+    }
+    
+    h2 {
+      @apply text-xl;
+    }
+  }
+}
+
+/* Animações e efeitos */
+.animate-bounce {
+  animation: bounce 1.5s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-tada {
+  animation: tada 1s ease-in-out;
+}
+
+@keyframes tada {
+  0% {
+    transform: scale(1);
+  }
+  10%, 20% {
+    transform: scale(0.9) rotate(-3deg);
+  }
+  30%, 50%, 70%, 90% {
+    transform: scale(1.1) rotate(3deg);
+  }
+  40%, 60%, 80% {
+    transform: scale(1.1) rotate(-3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* Animação de aparecimento */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação de revelação do card */
+.animate-reveal {
+  animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Loading spinner ao estilo do Duolingo com tema católico */
+.loader-catholic {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 4px solid hsl(var(--muted));
+  border-top-color: hsl(var(--primary));
+  border-right-color: hsl(var(--secondary));
+  border-bottom-color: hsl(var(--accent));
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Loading de página estilo Duolingo */
+.page-loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, 
+    hsl(var(--primary)) 0%, 
+    hsl(var(--accent)) 50%, 
+    hsl(var(--secondary)) 100%);
+  z-index: 100;
+  animation: loadingBar 1.5s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+@keyframes loadingBar {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* Efeito vitral para cards - mais sutil, estilo Duolingo */
+.card-vitral {
+  @apply relative overflow-hidden border-0 rounded-xl shadow-lg;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 5px 10px -5px rgba(0, 0, 0, 0.05);
+  background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.5));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card-vitral:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.15), 0 5px 15px -5px rgba(0, 0, 0, 0.08);
+}
+
+.card-vitral::before {
+  content: '';
+  @apply absolute inset-0 z-[-1] opacity-15;
+  background: linear-gradient(45deg, 
+    hsl(var(--primary)) 0%, 
+    hsl(var(--secondary)) 30%, 
+    hsl(var(--accent)) 60%,
+    hsl(var(--primary)) 100%
+  );
+}
+
+/* Botão estilo Duolingo católico */
+.btn-catholic {
+  @apply relative overflow-hidden font-medium transition-all rounded-full py-3 px-6 shadow-md;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  transform: translateY(0);
+  transition: transform 0.2s ease, shadow 0.2s ease;
+  border: none;
+}
+
+.btn-catholic:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-catholic:active {
+  transform: translateY(0);
+}
+
+.btn-catholic::after {
+  content: '';
+  @apply absolute inset-0 z-[-1] opacity-0 transition-opacity duration-300;
+  background: linear-gradient(45deg, 
+    hsl(var(--primary)) 0%,
+    hsl(var(--accent)) 100%
+  );
+}
+
+.btn-catholic:hover::after {
+  @apply opacity-100;
+}
+
+/* Estilo para inputs ao estilo Duolingo */
+.input-catholic {
+  @apply border-2 rounded-xl p-3 transition-all duration-200 focus:ring-2 focus:ring-primary/50 focus:border-primary;
+  font-size: 16px; /* Evita zoom no iOS */
+}
+
+/* Customizações para RadioGroup no estilo Duolingo */
+.radio-group-item {
+  @apply border-2 border-border rounded-xl p-4 transition-all cursor-pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.radio-group-item:hover {
+  transform: translateY(-2px);
+}
+
+.radio-group-item[data-state="checked"] {
+  @apply border-primary bg-primary/10;
+  transform: translateY(-2px);
+}
+
+/* Estilos para os cards de quiz - mais similares ao Duolingo */
+.quiz-card {
+  @apply transition-all duration-300 rounded-xl overflow-hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  transform: translateY(0);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.quiz-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Efeito halo para elementos santos */
+.holy-glow {
+  @apply relative;
+}
+
+.holy-glow::after {
+  content: '';
+  @apply absolute inset-[-5px] z-[-1] opacity-0 transition-opacity duration-500 rounded-full blur-md;
+  background: radial-gradient(circle, hsl(var(--accent)) 0%, transparent 70%);
+}
+
+.holy-glow:hover::after {
+  @apply opacity-60;
+}
+
+/* Badges com estilo Duolingo */
+.badge-duolingo {
+  @apply px-3 py-1 rounded-full text-xs font-bold shadow-sm;
+}
+
+.badge-success {
+  @apply bg-green-500 text-white;
+}
+
+.badge-warning {
+  @apply bg-yellow-500 text-white;
+}
+
+.badge-info {
+  @apply bg-blue-500 text-white;
+}
+
+/* Medalhas para ranking - estilo Duolingo */
+.badge-gold {
+  @apply bg-yellow-100 text-yellow-800 border border-yellow-300;
+  background-image: linear-gradient(45deg, #fef3c7, #fbbf24, #fef3c7);
+}
+
+.badge-silver {
+  @apply bg-gray-100 text-gray-800 border border-gray-300;
+  background-image: linear-gradient(45deg, #f3f4f6, #d1d5db, #f3f4f6);
+}
+
+.badge-bronze {
+  @apply bg-amber-100 text-amber-800 border border-amber-300;
+  background-image: linear-gradient(45deg, #fef3c7, #d97706, #fef3c7);
+}
+
+/* Animação para celebração */
+@keyframes celebrate {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-celebrate {
+  animation: celebrate 0.5s ease-in-out;
+}
+
+/* Botão de ação flutuante estilo app mobile */
+.fab {
+  @apply fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+  color: white;
+  z-index: 50;
+  transition: transform 0.3s ease;
+}
+
+.fab:hover {
+  transform: scale(1.05);
+}
+
+.fab:active {
+  transform: scale(0.95);
+}
+
+/* Mobile Navigation Menu */
+.mobile-nav {
+  @apply fixed bottom-0 left-0 right-0 bg-background border-t border-border flex justify-around items-center p-2 z-50;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9);
+  padding-bottom: env(safe-area-inset-bottom, 10px);
+}
+
+.dark .mobile-nav {
+  background: rgba(30, 30, 45, 0.9);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.mobile-nav-item {
+  @apply flex flex-col items-center justify-center py-2 px-3 rounded-lg transition-all duration-200 relative;
+}
+
+.mobile-nav-item.active {
+  @apply bg-primary/10;
+  transform: translateY(-5px);
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+.mobile-nav-item svg {
+  transition: transform 0.2s ease;
+}
+
+.mobile-nav-item:active svg {
+  transform: scale(0.85);
+}
+
+.mobile-nav-item:not(.active):hover svg {
+  transform: translateY(-2px);
+}
+
+.mobile-nav-item:active {
+  transform: scale(0.95);
+}
+
+/* Skeleton loader para conteúdo */
+.skeleton {
+  @apply animate-pulse bg-muted rounded-md;
+}
+
+/* Progress bar estilo Duolingo */
+.progress-duolingo {
+  @apply bg-muted rounded-full overflow-hidden h-2.5;
+}
+
+.progress-duolingo-bar {
+  @apply h-full rounded-full;
+  background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  transition: width 1s ease;
+}
+
+/* Efeito confete para celebração */
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Feedback visual para respostas de quiz */
+.answer-feedback {
+  @apply fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 px-6 py-4 rounded-xl text-white font-bold shadow-lg z-50;
+  opacity: 0;
+  animation: feedbackPop 1.5s ease forwards;
+}
+
+.answer-feedback.correct {
+  @apply bg-green-500;
+}
+
+.answer-feedback.incorrect {
+  @apply bg-destructive;
+}
+
+@keyframes feedbackPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+
+/* Sidebar para mobile */
+@media (max-width: 768px) {
+  .sidebar-wrapper {
+    @apply fixed inset-0 z-50 transform transition-transform duration-300 ease-in-out;
+  }
+  
+  .sidebar-wrapper.closed {
+    transform: translateX(-100%);
+  }
+  
+  .sidebar-overlay {
+    @apply fixed inset-0 bg-black opacity-50 z-40;
+  }
+  
+  .sidebar-content {
+    @apply h-full w-3/4 max-w-xs bg-background border-r border-border overflow-auto;
+  }
+}
+
+/* Toast para mensagens tipo Duolingo */
+.toast-message {
+  @apply fixed bottom-20 left-1/2 transform -translate-x-1/2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium z-50;
+  max-width: 90%;
+  animation: toastAppear 0.3s ease forwards, toastDisappear 0.3s ease forwards 2.7s;
+}
+
+.toast-success {
+  @apply bg-green-500 text-white;
+}
+
+.toast-error {
+  @apply bg-red-500 text-white;
+}
+
+.toast-info {
+  @apply bg-blue-500 text-white;
+}
+
+@keyframes toastAppear {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes toastDisappear {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+}
+
+/* Pulsing effect para destacar ações importantes */
+.pulse-attention {
+  animation: pulseAttention 2s infinite;
+}
+
+@keyframes pulseAttention {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--accent), 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(var(--accent), 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent), 0);
+  }
+}
+
+/* Layout ajustado para mobile */
+@media (max-width: 768px) {
+  .container {
+    @apply px-3 py-3;
+  }
+  
+  .card-vitral {
+    @apply rounded-lg;
+  }
+  
+  .mobile-padding {
+    @apply px-3 py-3;
+  }
+  
+  .mobile-grid {
+    @apply grid-cols-1;
+  }
+}
+
+/* Shimmer effect para skeletons */
+.shimmer {
+  @apply relative overflow-hidden bg-muted rounded-md;
+}
+
+.shimmer::after {
+  content: '';
+  @apply absolute inset-0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--primary), 0.2);
+  }
+  50% {
+    box-shadow: 0 0 10px 0 rgba(var(--primary), 0.3);
+  }
+}
