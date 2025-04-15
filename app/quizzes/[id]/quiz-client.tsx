@@ -83,11 +83,19 @@ export default function QuizClient({ quizId }: QuizClientProps) {
     async function fetchQuiz() {
       setIsLoading(true)
       try {
+        console.log("Fetching quiz with ID:", quizId)
+        if (!quizId || quizId === 'create') {
+          console.error("Invalid quiz ID:", quizId)
+          setError("Quiz inválido. Por favor, tente outra página.")
+          return
+        }
+
         // Obter o ID do usuário da sessão
         const response = await fetch("/api/session")
         const sessionData = await response.json()
         
         if (!sessionData.success || !sessionData.user?.id) {
+          console.log("No user session found, redirecting to login")
           router.push("/login")
           return
         }
@@ -95,10 +103,19 @@ export default function QuizClient({ quizId }: QuizClientProps) {
         setUserId(sessionData.user.id)
         
         // Obter dados do quiz
+        console.log("Fetching quiz data from API")
         const quizResponse = await fetch(`/api/quizzes/${quizId}`)
+        
+        if (!quizResponse.ok) {
+          console.error("Quiz API response not OK:", quizResponse.status)
+          setError("Não foi possível encontrar este quiz. Ele pode ter sido removido ou expirado.")
+          return
+        }
+        
         const quizData = await quizResponse.json()
         
         if (!quizData.success) {
+          console.error("Quiz data fetch error:", quizData.error)
           setError(quizData.error || "Falha ao carregar o quiz")
           return
         }

@@ -8,12 +8,22 @@ export async function GET(
 ) {
   try {
     // Extrair e decodificar o ID do quiz
-    const quizId = await decodeURIComponent(params.id)
+    const quizId = decodeURIComponent(params.id)
+    
+    // Validar o ID do quiz
+    if (!quizId || quizId === 'create' || quizId === 'undefined') {
+      console.error("ID de quiz inválido:", quizId)
+      return NextResponse.json(
+        { success: false, error: "ID de quiz inválido" },
+        { status: 400 }
+      )
+    }
 
     // Buscar o quiz do banco de dados
     const quiz = await getQuiz(quizId)
 
     if (!quiz) {
+      console.error("Quiz não encontrado com ID:", quizId)
       return NextResponse.json(
         { success: false, error: "Quiz não encontrado" },
         { status: 404 }

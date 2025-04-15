@@ -85,7 +85,7 @@ export default async function QuizzesPage() {
         
         {user.role === "catequista" && (
           <Button asChild className="btn-catholic">
-            <Link href="/quizzes/criar" className="flex items-center gap-2">
+            <Link href="/quizzes/create" className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               <span>Criar novo Quiz</span>
             </Link>

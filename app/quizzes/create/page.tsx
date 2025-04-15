@@ -21,15 +21,19 @@ export default function CreateQuizPage() {
   useEffect(() => {
     async function loadUserData() {
       try {
+        console.log("Fetching user session data...")
         const response = await fetch("/api/session")
         const data = await response.json()
+        console.log("Session data received:", data)
 
         if (!data.success || !data.user) {
+          console.log("No user found in session, redirecting to login")
           router.push("/login")
           return
         }
 
         if (!data.parishId) {
+          console.log("No parish ID found in session")
           setError("Você não está associado a uma paróquia")
           return
         }
