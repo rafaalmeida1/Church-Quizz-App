@@ -37,8 +37,9 @@ export interface Quiz {
   questoes: Question[]
   criadoEm: number
   expiraEm: number  // Data em que o quiz expira (obrigatório agora)
-  status: "pendente" | "ativo" | "encerrado"  // Status do quiz
+  status: "pendente" | "ativo" | "encerrado" | "gerando" | "erro"  // Status do quiz
   pontuacaoMaxima?: number // Pontuação máxima possível
+  erro?: string // Mensagem de erro, se houver
 }
 
 export interface Question {

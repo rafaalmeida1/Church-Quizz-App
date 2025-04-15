@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from "react"
 import { getSession } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
@@ -11,9 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SkeletonCard } from "@/components/ui/loading"
+import { SkeletonCard, LoadingDots, Spinner } from "@/components/ui/loading"
 
-import { BookOpen, Star, Timer, CheckCircle2, Plus, TrendingUp, Award, Flame } from "lucide-react"
+import { BookOpen, Star, Timer, CheckCircle2, Plus, TrendingUp, Award, Flame, ClipboardCheck, AlertCircle } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -36,6 +39,14 @@ export default async function QuizzesPage() {
   
   const pendingQuizzes = quizzes
     .filter(quiz => quiz.status === "pendente")
+    .sort((a, b) => b.criadoEm - a.criadoEm)
+  
+  const generatingQuizzes = quizzes
+    .filter(quiz => quiz.status === "gerando")
+    .sort((a, b) => b.criadoEm - a.criadoEm)
+  
+  const errorQuizzes = quizzes
+    .filter(quiz => quiz.status === "erro")
     .sort((a, b) => b.criadoEm - a.criadoEm)
   
   const completedQuizzes = quizzes
@@ -72,6 +83,34 @@ export default async function QuizzesPage() {
     if (score >= 70) return "badge-warning";
     return "badge-destructive";
   };
+  
+  const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
+  
+  async function handleDeleteQuiz(quizId: string) {
+    if (!confirm("Tem certeza que deseja excluir este quiz?")) {
+      return;
+    }
+    
+    setDeletingQuizId(quizId);
+    
+    try {
+      const response = await fetch(`/api/quizzes/${quizId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        // Recarregar a página após excluir
+        window.location.reload();
+      } else {
+        alert("Erro ao excluir o quiz. Tente novamente.");
+      }
+    } catch (error) {
+      console.error("Erro ao excluir quiz:", error);
+      alert("Erro ao excluir o quiz. Tente novamente.");
+    } finally {
+      setDeletingQuizId(null);
+    }
+  }
   
   return (
     <div className="container py-6 pb-24 md:pb-6 max-w-5xl">
@@ -175,7 +214,13 @@ export default async function QuizzesPage() {
           <TabsTrigger value="ativos" className="rounded-full">Disponíveis</TabsTrigger>
           <TabsTrigger value="completados" className="rounded-full">Completados</TabsTrigger>
           {user.role === "catequista" && (
-            <TabsTrigger value="pendentes" className="rounded-full">Pendentes</TabsTrigger>
+            <>
+              <TabsTrigger value="pendentes" className="rounded-full">Pendentes</TabsTrigger>
+              <TabsTrigger value="gerando" className="rounded-full">Em Geração</TabsTrigger>
+              {errorQuizzes.length > 0 && (
+                <TabsTrigger value="erros" className="rounded-full">Com Erros</TabsTrigger>
+              )}
+            </>
           )}
         </TabsList>
         
@@ -339,64 +384,177 @@ export default async function QuizzesPage() {
           )}
         </TabsContent>
         
-        {user.role === "catequista" && (
-          <TabsContent value="pendentes">
-            {pendingQuizzes.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {pendingQuizzes.map((quiz) => (
-                  <Card key={quiz.id} className="overflow-hidden quiz-card">
-                    <div className="relative">
-                      <div className="h-3 w-full bg-muted" />
-                      <CardContent className="p-6">
-                        <div className="flex items-start justify-between">
+        <TabsContent value="pendentes">
+          {pendingQuizzes.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {pendingQuizzes.map((quiz) => (
+                <Card key={quiz.id} className="overflow-hidden quiz-card">
+                  <div className="relative">
+                    <div className="h-3 w-full bg-muted" />
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <Badge variant="outline" className="mb-2">
+                            {quiz.tipo === "adulto" ? "Adultos" : "Crianças"}
+                          </Badge>
+                          <h3 className="text-xl font-bold mb-1">{quiz.titulo}</h3>
+                          <p className="text-muted-foreground text-sm">{quiz.descricao}</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-full p-3">
+                          <Timer className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 mb-4">
+                        <p className="text-sm text-muted-foreground">
+                          Criado em {new Date(quiz.criadoEm).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
                           <div>
-                            <Badge variant="outline" className="mb-2">
-                              {quiz.tipo === "adulto" ? "Adultos" : "Crianças"}
-                            </Badge>
-                            <h3 className="text-xl font-bold mb-1">{quiz.titulo}</h3>
-                            <p className="text-muted-foreground text-sm">{quiz.descricao}</p>
-                          </div>
-                          <div className="bg-muted/50 rounded-full p-3">
-                            <Timer className="h-6 w-6 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">Questões</p>
+                            <p className="font-bold">{quiz.questoes.length}</p>
                           </div>
                         </div>
                         
-                        <div className="mt-4 mb-4">
-                          <p className="text-sm text-muted-foreground">
-                            Criado em {new Date(quiz.criadoEm).toLocaleDateString('pt-BR')}
-                          </p>
+                        <Button asChild>
+                          <Link href={`/quizzes/editar/${quiz.id}`}>
+                            Editar
+                          </Link>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 bg-muted/20 rounded-xl border border-border">
+              <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">Nenhum quiz pendente</h3>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Não há quizzes aguardando aprovação no momento.
+              </p>
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="gerando">
+          {generatingQuizzes.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {generatingQuizzes.map((quiz) => (
+                <Card key={quiz.id} className="overflow-hidden quiz-card pulse-attention">
+                  <div className="relative">
+                    <div className="bg-gradient-to-r from-blue-400 to-purple-500 h-3 w-full" />
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <Badge className="badge-duolingo mb-2">
+                            {quiz.tipo === "adulto" ? "Adultos" : "Crianças"}
+                          </Badge>
+                          <h3 className="text-xl font-bold mb-1">{quiz.titulo}</h3>
+                          <p className="text-muted-foreground text-sm mb-4">{quiz.descricao}</p>
+                        </div>
+                        <div className="bg-blue-500/10 rounded-full p-3">
+                          <LoadingDots />
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm text-muted-foreground flex items-center gap-2 mt-2 mb-4">
+                        <Timer className="h-4 w-4" />
+                        <span>Criado há {formatDistanceToNow(quiz.criadoEm, { locale: ptBR })}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Status</p>
+                            <p className="font-bold">Gerando Questões</p>
+                          </div>
                         </div>
                         
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Questões</p>
-                              <p className="font-bold">{quiz.questoes.length}</p>
-                            </div>
-                          </div>
-                          
-                          <Button asChild>
-                            <Link href={`/quizzes/editar/${quiz.id}`}>
-                              Editar
-                            </Link>
-                          </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => window.location.reload()}
+                        >
+                          Verificar Status
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 bg-muted/20 rounded-xl border border-border">
+              <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">Nenhum quiz em geração</h3>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Não há quizzes sendo gerados no momento.
+              </p>
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="erros">
+          {errorQuizzes.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {errorQuizzes.map((quiz) => (
+                <Card key={quiz.id} className="overflow-hidden quiz-card">
+                  <div className="relative">
+                    <div className="bg-red-500 h-3 w-full" />
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <Badge className="badge-duolingo mb-2 bg-red-100 text-red-700 border-red-200">
+                            {quiz.tipo === "adulto" ? "Adultos" : "Crianças"}
+                          </Badge>
+                          <h3 className="text-xl font-bold mb-1">{quiz.titulo}</h3>
+                          <p className="text-muted-foreground text-sm mb-4">{quiz.descricao}</p>
                         </div>
-                      </CardContent>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-10 bg-muted/20 rounded-xl border border-border">
-                <Timer className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">Nenhum quiz pendente</h3>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  Você não tem quizzes em estado pendente no momento.
-                </p>
-              </div>
-            )}
-          </TabsContent>
-        )}
+                        <div className="bg-red-500/10 rounded-full p-3">
+                          <AlertCircle className="h-6 w-6 text-red-500" />
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm text-red-500 flex items-center gap-2 mt-2 mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>{quiz.erro || "Erro na geração do quiz"}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Criado em</p>
+                            <p className="font-bold">{new Date(quiz.criadoEm).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          variant="destructive"
+                          onClick={() => handleDeleteQuiz(quiz.id!)}
+                          disabled={deletingQuizId === quiz.id}
+                        >
+                          {deletingQuizId === quiz.id ? <Spinner size="small" /> : "Excluir Quiz"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 bg-muted/20 rounded-xl border border-border">
+              <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">Sem erros</h3>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Não há quizzes com erros no momento.
+              </p>
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   )

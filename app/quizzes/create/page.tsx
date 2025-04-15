@@ -81,7 +81,18 @@ export default function CreateQuizPage() {
       formData.append("parishId", parishId)
       formData.append("criadoPor", user.id as string)
 
-      const result = await createQuizAction(formData)
+      // Enviar os dados via API regular para evitar timeout do Server Action
+      const response = await fetch("/api/quizzes/create", {
+        method: "POST",
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
       
       if (result.success) {
         console.log("Quiz criado com sucesso, ID:", result.quizId)
@@ -93,7 +104,9 @@ export default function CreateQuizPage() {
       }
     } catch (err) {
       console.error("Erro ao criar quiz:", err)
-      setError("Falha ao criar quiz. Verifique sua conexão e tente novamente.")
+      setError(typeof err === 'object' && err !== null && 'message' in err 
+        ? (err as Error).message 
+        : "Falha ao criar quiz. Verifique sua conexão e tente novamente.")
     } finally {
       setIsLoading(false)
     }
