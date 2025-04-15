@@ -9,6 +9,16 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Authenticate user
+    const session = await getSession()
+    
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Não autenticado" },
+        { status: 401 }
+      )
+    }
+    
     const quizId = params.id.startsWith('quiz:') ? params.id : `quiz:${params.id}`
     
     // Retrieve quiz from KV store
@@ -21,9 +31,23 @@ export async function GET(
       )
     }
     
+    // Parse quiz data
+    const quiz = typeof quizData === 'string' ? JSON.parse(quizData) : quizData
+    
+    // Verify tenant isolation - user must be from the same parish or an admin
+    const isFromSameParish = quiz.parishId === session.user.parishId
+    const isAdmin = session.user.role === 'admin'
+    
+    if (!isFromSameParish && !isAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Sem permissão para acessar este quiz" },
+        { status: 403 }
+      )
+    }
+    
     return NextResponse.json({
       success: true,
-      quiz: quizData
+      quiz
     })
     
   } catch (error) {
@@ -41,34 +65,42 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Verificar autenticação
-    const { user } = await getSession()
+    // Authenticate user
+    const session = await getSession()
     
-    if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Usuário não autenticado" 
-      }, { status: 401 })
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Não autenticado" },
+        { status: 401 }
+      )
     }
     
-    const quizId = params.id
+    // Format quiz ID
+    const quizId = params.id.startsWith('quiz:') ? params.id : `quiz:${params.id}`
     
-    // Buscar o quiz existente
-    const quiz = await getQuiz(quizId)
+    // Get quiz data
+    const quizData = await kv.get(quizId)
     
-    if (!quiz) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Quiz não encontrado" 
-      }, { status: 404 })
+    if (!quizData) {
+      return NextResponse.json(
+        { success: false, error: "Quiz não encontrado" },
+        { status: 404 }
+      )
     }
     
-    // Verificar permissão (apenas o criador pode editar)
-    if (quiz.criadoPor !== user.id) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Sem permissão para editar este quiz" 
-      }, { status: 403 })
+    const quiz = typeof quizData === 'string' ? JSON.parse(quizData) : quizData
+    
+    // Verify tenant isolation - user must be from the same parish
+    const isFromSameParish = quiz.parishId === session.user.parishId
+    const isAdmin = session.user.role === 'admin'
+    const isCreator = quiz.criadoPor === session.user.id
+    
+    // Only creator from same parish or admin can edit
+    if ((!isCreator || !isFromSameParish) && !isAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Sem permissão para editar este quiz" },
+        { status: 403 }
+      )
     }
     
     // Obter os dados da requisição
@@ -77,20 +109,23 @@ export async function PATCH(
     
     // Validar os dados
     if (!titulo || !descricao || !tipo) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Dados incompletos" 
-      }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Dados incompletos" },
+        { status: 400 }
+      )
     }
     
-    // Atualizar o quiz
-    const updatedFields = {
+    // Atualizar o quiz com os novos dados
+    const updatedQuiz = {
+      ...quiz,
       titulo,
       descricao,
-      tipo
+      tipo,
+      atualizadoEm: new Date().toISOString()
     }
     
-    await kv.hset(quizId, updatedFields)
+    // Salvar as alterações
+    await kv.set(quizId, JSON.stringify(updatedQuiz))
     
     // Retornar sucesso
     return NextResponse.json({ 
@@ -99,11 +134,14 @@ export async function PATCH(
     })
     
   } catch (error) {
-    console.error("Erro ao atualizar quiz:", error)
-    return NextResponse.json({ 
-      success: false, 
-      error: "Falha ao atualizar quiz" 
-    }, { status: 500 })
+    console.error("[QUIZ UPDATE] Erro:", error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Erro ao atualizar quiz" 
+      },
+      { status: 500 }
+    )
   }
 }
 
