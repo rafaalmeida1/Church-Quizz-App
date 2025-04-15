@@ -98,7 +98,7 @@ export default function CreateQuizPage() {
       if (result.success) {
         console.log("Quiz criado com sucesso, ID:", result.quizId)
         // Redireciona para a página de quizzes em geração após criar o quiz
-        router.push("/quizzes?tab=gerando")
+        router.push("/quizzes?tab=pendentes")
       } else {
         console.error("Erro retornado pela API:", result.error)
         setError(result.error || "Falha ao criar quiz")
@@ -189,7 +189,7 @@ export default function CreateQuizPage() {
               type="submit" 
               className="w-full" 
               isLoading={isLoading} 
-              loadingText="Gerando Quiz..."
+              loadingText="Gerando Quiz (leva até 1 minuto)..."
             >
               Criar Quiz
             </LoadingButton>

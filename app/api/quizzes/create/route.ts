@@ -51,92 +51,57 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Define a data de expiração para 7 dias a partir de agora
-    const expiraEm = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 dias em milissegundos
+    try {
+      // Define a data de expiração para 7 dias a partir de agora
+      const expiraEm = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 dias em milissegundos
 
-    // Iniciar a geração imediatamente em segundo plano
-    const generateQuestionsPromise = generateQuizQuestions(tema, tipo)
-    
-    // Iniciar com perguntas temporárias enquanto as reais são geradas
-    const tempQuestoes: Question[] = Array(15).fill(null).map(() => generateTemporaryQuestion())
-    
-    // Criar o quiz com questões temporárias
-    const quizTemp: Quiz = {
-      titulo,
-      descricao,
-      tema,
-      tipo,
-      parishId,
-      criadoPor,
-      questoes: tempQuestoes,
-      criadoEm: Date.now(),
-      expiraEm: expiraEm,
-      status: "gerando", // Status especial para indicar que está em geração
-      pontuacaoMaxima: 150, // 10 pontos por questão (15 questões)
-    }
-
-    // Salvar o quiz com questões temporárias
-    const quizId = await createQuiz(quizTemp)
-    
-    // Função para atualizar o quiz quando as questões estiverem prontas
-    const updateQuizWithQuestions = async () => {
-      try {
-        console.log(`Iniciando geração de questões para quiz ${quizId}`)
-        
-        // Aguardar a conclusão da geração de questões
-        const questoes = await generateQuestionsPromise
-        
-        // Atualizar o quiz com as questões reais
-        await kv.hset(quizId, { 
-          questoes: JSON.stringify(questoes),
-          status: "pendente", // Atualiza para pendente (aguardando aprovação)
-          pontuacaoMaxima: questoes.length * 10 // 10 pontos por questão
-        })
-        
-        console.log(`Questões geradas com sucesso para quiz ${quizId}`)
-      } catch (error) {
-        console.error(`Erro na geração de questões para quiz ${quizId}:`, error)
-        
-        // Atualizar o status para erro
-        await kv.hset(quizId, { 
-          status: "erro",
-          erro: "Falha ao gerar questões. Entre em contato com o administrador."
-        })
-        
-        // Enviar notificação de erro
-        try {
-          await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/notifications/quiz-error`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              quizId,
-              message: "Falha ao gerar as questões para o quiz.", 
-              adminKey: process.env.ADMIN_API_KEY
-            }),
-          })
-        } catch (notifError) {
-          console.error("Erro ao enviar notificação:", notifError)
-        }
+      console.log(`Gerando questões para o tema: "${tema}" (${tipo})`)
+      
+      // Criamos o quiz com questões reais imediatamente em vez de usar placeholders
+      // Isso faz com que o usuário precise esperar um pouco mais pela resposta,
+      // mas garante que o quiz será criado com as questões corretas
+      const questoes = await generateQuizQuestions(tema, tipo)
+      
+      console.log(`Questões geradas com sucesso (${questoes.length}) para quiz de tema "${tema}"`)
+      
+      // Criar o quiz com as questões reais
+      const quiz: Quiz = {
+        titulo,
+        descricao,
+        tema,
+        tipo,
+        parishId,
+        criadoPor,
+        questoes: questoes,
+        criadoEm: Date.now(),
+        expiraEm: expiraEm,
+        status: "pendente", // Status como pendente pois já foi gerado
+        pontuacaoMaxima: questoes.length * 10 // 10 pontos por questão
       }
+  
+      // Salvar o quiz com as questões reais
+      const quizId = await createQuiz(quiz)
+      
+      console.log(`Quiz ${quizId} criado com sucesso`)
+      
+      // Retornar sucesso imediatamente
+      return NextResponse.json({ 
+        success: true, 
+        quizId, 
+        message: "Quiz criado com sucesso!"
+      })
+    } catch (genError: any) {
+      console.error("Erro ao gerar questões:", genError)
+      return NextResponse.json({ 
+        success: false, 
+        error: `Falha ao gerar o quiz: ${genError.message || "Erro desconhecido"}` 
+      }, { status: 500 })
     }
-    
-    // Iniciar o processo de atualização em segundo plano
-    updateQuizWithQuestions()
-    
-    // Retornar sucesso imediatamente
-    return NextResponse.json({ 
-      success: true, 
-      quizId, 
-      message: "Quiz em geração. As questões estarão prontas em breve."
-    })
-    
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao criar quiz:", error)
     return NextResponse.json({ 
       success: false, 
-      error: "Falha ao criar quiz" 
+      error: `Falha ao criar quiz: ${error.message || "Erro desconhecido"}` 
     }, { status: 500 })
   }
 } 
