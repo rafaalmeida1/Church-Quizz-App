@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -46,6 +46,73 @@ export default function QuizzesClient({
   };
   
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState<string[]>([]);
+  const [refreshCount, setRefreshCount] = useState(0);
+  
+  // Verificar status periodicamente se houver quizzes em geração
+  useEffect(() => {
+    if (generatingQuizzes.length === 0) return;
+    
+    // Iniciar verificação automática 
+    const interval = setInterval(() => {
+      // Forçar atualização da página a cada 30 segundos se houver quizzes em geração
+      setRefreshCount(count => count + 1);
+      
+      // Se passaram mais de 5 atualizações (2.5 minutos), recarregue a página
+      if (refreshCount > 5) {
+        window.location.reload();
+      }
+    }, 30000); // A cada 30 segundos
+    
+    return () => clearInterval(interval);
+  }, [generatingQuizzes.length, refreshCount]);
+  
+  // Função para processar manualmente o próximo item da fila
+  async function processNextInQueue() {
+    try {
+      setCheckingStatus(prev => [...prev, "queue"]);
+      
+      const response = await fetch(`/api/quizzes/process-queue`);
+      if (!response.ok) {
+        throw new Error("Falha ao processar fila");
+      }
+      
+      const data = await response.json();
+      
+      // Recarregar a página para ver o resultado atualizado
+      window.location.reload();
+    } catch (error) {
+      console.error("Erro ao processar fila:", error);
+      alert("Não foi possível processar a fila de geração. Tente novamente mais tarde.");
+    } finally {
+      setCheckingStatus(prev => prev.filter(id => id !== "queue"));
+    }
+  }
+  
+  // Verificar status de um quiz específico
+  async function checkQuizStatus(quizId: string) {
+    try {
+      setCheckingStatus(prev => [...prev, quizId]);
+      
+      const response = await fetch(`/api/quizzes/status?quizId=${quizId}`);
+      if (!response.ok) {
+        throw new Error("Falha ao verificar status");
+      }
+      
+      const data = await response.json();
+      
+      // Se o status mudou, recarregue a página
+      if (data.success && data.status !== "gerando") {
+        window.location.reload();
+      } else {
+        alert("O quiz ainda está sendo gerado. Aguarde mais um pouco.");
+      }
+    } catch (error) {
+      console.error("Erro ao verificar status:", error);
+    } finally {
+      setCheckingStatus(prev => prev.filter(id => id !== quizId));
+    }
+  }
   
   async function handleDeleteQuiz(quizId: string) {
     if (!confirm("Tem certeza que deseja excluir este quiz?")) {
@@ -404,50 +471,76 @@ export default function QuizzesClient({
         
         <TabsContent value="gerando">
           {generatingQuizzes.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {generatingQuizzes.map((quiz) => (
-                <Card key={quiz.id} className="overflow-hidden quiz-card pulse-attention">
-                  <div className="relative">
-                    <div className="bg-gradient-to-r from-blue-400 to-purple-500 h-3 w-full" />
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <Badge className="badge-duolingo mb-2">
-                            {quiz.tipo === "adulto" ? "Adultos" : "Crianças"}
-                          </Badge>
-                          <h3 className="text-xl font-bold mb-1">{quiz.titulo}</h3>
-                          <p className="text-muted-foreground text-sm mb-4">{quiz.descricao}</p>
-                        </div>
-                        <div className="bg-blue-500/10 rounded-full p-3">
-                          <LoadingDots />
-                        </div>
-                      </div>
-                      
-                      <div className="text-sm text-muted-foreground flex items-center gap-2 mt-2 mb-4">
-                        <Timer className="h-4 w-4" />
-                        <span>Criado há {formatDistanceToNow(quiz.criadoEm, { locale: ptBR })}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+            <>
+              <div className="mb-4 flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  Os quizzes abaixo estão na fila para geração. Este processo pode levar alguns minutos.
+                </p>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={processNextInQueue}
+                  disabled={checkingStatus.includes("queue")}
+                >
+                  {checkingStatus.includes("queue") ? (
+                    <Spinner size="small" />
+                  ) : (
+                    <>Processar próximo da fila</>
+                  )}
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {generatingQuizzes.map((quiz) => (
+                  <Card key={quiz.id} className="overflow-hidden quiz-card pulse-attention">
+                    <div className="relative">
+                      <div className="bg-gradient-to-r from-blue-400 to-purple-500 h-3 w-full" />
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between">
                           <div>
-                            <p className="text-sm text-muted-foreground">Status</p>
-                            <p className="font-bold">Gerando Questões</p>
+                            <Badge className="badge-duolingo mb-2">
+                              {quiz.tipo === "adulto" ? "Adultos" : "Crianças"}
+                            </Badge>
+                            <h3 className="text-xl font-bold mb-1">{quiz.titulo}</h3>
+                            <p className="text-muted-foreground text-sm mb-4">{quiz.descricao}</p>
+                          </div>
+                          <div className="bg-blue-500/10 rounded-full p-3">
+                            <LoadingDots />
                           </div>
                         </div>
                         
-                        <Button 
-                          variant="outline"
-                          onClick={() => window.location.reload()}
-                        >
-                          Verificar Status
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </div>
-                </Card>
-              ))}
-            </div>
+                        <div className="text-sm text-muted-foreground flex items-center gap-2 mt-2 mb-4">
+                          <Timer className="h-4 w-4" />
+                          <span>Criado há {formatDistanceToNow(quiz.criadoEm, { locale: ptBR })}</span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Status</p>
+                              <p className="font-bold">Gerando Questões</p>
+                            </div>
+                          </div>
+                          
+                          <Button 
+                            variant="outline"
+                            onClick={() => checkQuizStatus(quiz.id!)}
+                            disabled={checkingStatus.includes(quiz.id!)}
+                          >
+                            {checkingStatus.includes(quiz.id!) ? (
+                              <Spinner size="small" />
+                            ) : (
+                              "Verificar Status"
+                            )}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-center py-10 bg-muted/20 rounded-xl border border-border">
               <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

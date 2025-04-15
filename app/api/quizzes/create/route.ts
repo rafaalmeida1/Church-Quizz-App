@@ -75,8 +75,15 @@ export async function POST(request: NextRequest) {
     // Salvar o quiz com questões temporárias
     const quizId = await createQuiz(quizTemp)
     
-    // Iniciar o processo de geração assíncrona das questões
-    generateQuestionsAsync(quizId, tema, tipo)
+    // Agendar a geração das questões adicionando à fila
+    // Esta é a chave para a solução: em vez de tentar gerar na mesma chamada,
+    // adicionamos a uma lista de tarefas pendentes que será processada por um job
+    await kv.lpush("pending_quiz_generations", JSON.stringify({
+      quizId,
+      tema,
+      tipo,
+      timestamp: Date.now()
+    }))
     
     // Retornar sucesso imediatamente
     return NextResponse.json({ 
