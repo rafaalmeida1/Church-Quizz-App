@@ -51,12 +51,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Criar questões temporárias (para não bloquear a resposta)
-    const tempQuestoes: Question[] = Array(15).fill(null).map(() => generateTemporaryQuestion())
-    
     // Define a data de expiração para 7 dias a partir de agora
     const expiraEm = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 dias em milissegundos
 
+    // Iniciar a geração imediatamente em segundo plano
+    const generateQuestionsPromise = generateQuizQuestions(tema, tipo)
+    
+    // Iniciar com perguntas temporárias enquanto as reais são geradas
+    const tempQuestoes: Question[] = Array(15).fill(null).map(() => generateTemporaryQuestion())
+    
     // Criar o quiz com questões temporárias
     const quizTemp: Quiz = {
       titulo,
@@ -75,15 +78,52 @@ export async function POST(request: NextRequest) {
     // Salvar o quiz com questões temporárias
     const quizId = await createQuiz(quizTemp)
     
-    // Agendar a geração das questões adicionando à fila
-    // Esta é a chave para a solução: em vez de tentar gerar na mesma chamada,
-    // adicionamos a uma lista de tarefas pendentes que será processada por um job
-    await kv.lpush("pending_quiz_generations", JSON.stringify({
-      quizId,
-      tema,
-      tipo,
-      timestamp: Date.now()
-    }))
+    // Função para atualizar o quiz quando as questões estiverem prontas
+    const updateQuizWithQuestions = async () => {
+      try {
+        console.log(`Iniciando geração de questões para quiz ${quizId}`)
+        
+        // Aguardar a conclusão da geração de questões
+        const questoes = await generateQuestionsPromise
+        
+        // Atualizar o quiz com as questões reais
+        await kv.hset(quizId, { 
+          questoes: JSON.stringify(questoes),
+          status: "pendente", // Atualiza para pendente (aguardando aprovação)
+          pontuacaoMaxima: questoes.length * 10 // 10 pontos por questão
+        })
+        
+        console.log(`Questões geradas com sucesso para quiz ${quizId}`)
+      } catch (error) {
+        console.error(`Erro na geração de questões para quiz ${quizId}:`, error)
+        
+        // Atualizar o status para erro
+        await kv.hset(quizId, { 
+          status: "erro",
+          erro: "Falha ao gerar questões. Entre em contato com o administrador."
+        })
+        
+        // Enviar notificação de erro
+        try {
+          await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/notifications/quiz-error`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              quizId,
+              message: "Falha ao gerar as questões para o quiz.", 
+              adminKey: process.env.ADMIN_API_KEY
+            }),
+          })
+        } catch (notifError) {
+          console.error("Erro ao enviar notificação:", notifError)
+        }
+      }
+    }
+    
+    // Iniciar o processo de atualização em segundo plano
+    updateQuizWithQuestions()
     
     // Retornar sucesso imediatamente
     return NextResponse.json({ 
@@ -98,32 +138,5 @@ export async function POST(request: NextRequest) {
       success: false, 
       error: "Falha ao criar quiz" 
     }, { status: 500 })
-  }
-}
-
-// Função para gerar questões de forma assíncrona
-async function generateQuestionsAsync(quizId: string, tema: string, tipo: "adulto" | "crianca") {
-  try {
-    console.log(`Iniciando geração assíncrona de questões para quiz ${quizId}`)
-    
-    // Gerar questões usando IA
-    const questoes = await generateQuizQuestions(tema, tipo)
-    
-    // Atualizar o quiz com as questões reais
-    await kv.hset(quizId, { 
-      questoes: JSON.stringify(questoes),
-      status: "pendente", // Atualiza para pendente (aguardando aprovação)
-      pontuacaoMaxima: questoes.length * 10 // 10 pontos por questão
-    })
-    
-    console.log(`Questões geradas com sucesso para quiz ${quizId}`)
-  } catch (error) {
-    console.error(`Erro na geração assíncrona de questões para quiz ${quizId}:`, error)
-    
-    // Atualizar o status para erro
-    await kv.hset(quizId, { 
-      status: "erro",
-      erro: "Falha ao gerar questões. Entre em contato com o administrador."
-    })
   }
 } 

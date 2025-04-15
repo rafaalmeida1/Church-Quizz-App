@@ -1,8 +1,2 @@
 {
-  "crons": [
-    {
-      "path": "/api/quizzes/process-queue",
-      "schedule": "*/5 * * * *"
-    }
-  ]
 } 

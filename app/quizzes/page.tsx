@@ -75,7 +75,7 @@ export default async function QuizzesPage() {
   
   const suggestedQuiz = quizzesWithResponses
     .find(q => !q.userHasCompleted && q.status === "ativo")
-
+  
   return (
     <QuizzesClient 
       user={user} 

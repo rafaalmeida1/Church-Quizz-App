@@ -1,13 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SkeletonCard, LoadingDots, Spinner } from "@/components/ui/loading"
-import { BookOpen, Star, Timer, CheckCircle2, Plus, TrendingUp, Award, Flame, ClipboardCheck, AlertCircle, Bell } from "lucide-react"
+import { LoadingButton } from "@/components/ui/loading-button"
+import { BookOpen, Star, Timer, CheckCircle2, Plus, TrendingUp, Award, Flame, ClipboardCheck, AlertCircle, Bell, RefreshCw } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { User, Parish, Quiz } from "@/lib/types"
@@ -40,6 +42,8 @@ export default function QuizzesClient({
   averageScore,
   suggestedQuiz
 }: QuizzesClientProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const getBadgeStyle = (score: number) => {
     if (score >= 90) return "badge-success";
     if (score >= 70) return "badge-warning";
@@ -49,13 +53,38 @@ export default function QuizzesClient({
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
   const [checkingStatus, setCheckingStatus] = useState<string[]>([]);
   const [refreshCount, setRefreshCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Segurança para caso parish seja null
   const parishName = parish?.nome || "Sua Paróquia";
   
+  // Get initial tab from URL or default to "ativos"
+  const initialTab = searchParams.get("tab") || "ativos"
+  const [activeTab, setActiveTab] = useState(initialTab)
+  
+  // Handle tab change and update URL
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    const params = new URLSearchParams(searchParams)
+    params.set("tab", value)
+    router.push(`/quizzes?${params.toString()}`)
+  }
+  
+  // Manual refresh function
+  const refreshPage = async () => {
+    setIsRefreshing(true)
+    await new Promise(resolve => setTimeout(resolve, 300)) // Brief delay for visual feedback
+    window.location.reload()
+  }
+  
   // Verificar status periodicamente se houver quizzes em geração
   useEffect(() => {
     if (generatingQuizzes.length === 0) return;
+    
+    // Auto-select the generating tab if there are generating quizzes
+    if (generatingQuizzes.length > 0 && initialTab === "gerando") {
+      setActiveTab("gerando")
+    }
     
     // Iniciar verificação automática 
     const interval = setInterval(() => {
@@ -69,29 +98,7 @@ export default function QuizzesClient({
     }, 30000); // A cada 30 segundos
     
     return () => clearInterval(interval);
-  }, [generatingQuizzes.length, refreshCount]);
-  
-  // Função para processar manualmente o próximo item da fila
-  async function processNextInQueue() {
-    try {
-      setCheckingStatus(prev => [...prev, "queue"]);
-      
-      const response = await fetch(`/api/quizzes/process-queue`);
-      if (!response.ok) {
-        throw new Error("Falha ao processar fila");
-      }
-      
-      const data = await response.json();
-      
-      // Recarregar a página para ver o resultado atualizado
-      window.location.reload();
-    } catch (error) {
-      console.error("Erro ao processar fila:", error);
-      alert("Não foi possível processar a fila de geração. Tente novamente mais tarde.");
-    } finally {
-      setCheckingStatus(prev => prev.filter(id => id !== "queue"));
-    }
-  }
+  }, [generatingQuizzes.length, refreshCount, initialTab]);
   
   // Verificar status de um quiz específico
   async function checkQuizStatus(quizId: string) {
@@ -156,6 +163,16 @@ export default function QuizzesClient({
         
         <div className="flex items-center gap-2">
           <NotificationBell userId={user?.id} />
+          
+          <LoadingButton 
+            variant="outline" 
+            size="icon" 
+            onClick={refreshPage} 
+            isLoading={isRefreshing}
+            aria-label="Atualizar página"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </LoadingButton>
           
           {user.role === "catequista" && (
             <Button asChild className="btn-catholic">
@@ -245,16 +262,28 @@ export default function QuizzesClient({
         </div>
       )}
       
-      <Tabs defaultValue="ativos" className="animate-reveal">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="animate-reveal">
         <TabsList className="mb-6">
           <TabsTrigger value="ativos" className="rounded-full">Disponíveis</TabsTrigger>
           <TabsTrigger value="completados" className="rounded-full">Completados</TabsTrigger>
           {user.role === "catequista" && (
             <>
               <TabsTrigger value="pendentes" className="rounded-full">Pendentes</TabsTrigger>
-              <TabsTrigger value="gerando" className="rounded-full">Em Geração</TabsTrigger>
+              <TabsTrigger value="gerando" className="rounded-full">
+                Em Geração
+                {generatingQuizzes.length > 0 && (
+                  <span className="ml-1.5 bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {generatingQuizzes.length}
+                  </span>
+                )}
+              </TabsTrigger>
               {errorQuizzes.length > 0 && (
-                <TabsTrigger value="erros" className="rounded-full">Com Erros</TabsTrigger>
+                <TabsTrigger value="erros" className="rounded-full">
+                  Com Erros
+                  <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {errorQuizzes.length}
+                  </span>
+                </TabsTrigger>
               )}
             </>
           )}
@@ -482,21 +511,20 @@ export default function QuizzesClient({
             <>
               <div className="mb-4 flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">
-                  Os quizzes abaixo estão na fila para geração. Este processo pode levar alguns minutos.
+                  Os quizzes abaixo estão sendo gerados. Este processo geralmente leva de 1 a 3 minutos.
                 </p>
                 
-                <Button
+                <LoadingButton
                   variant="outline"
                   size="sm"
-                  onClick={processNextInQueue}
-                  disabled={checkingStatus.includes("queue")}
+                  onClick={refreshPage}
+                  isLoading={isRefreshing}
+                  loadingText="Atualizando..."
+                  className="flex items-center gap-1.5"
                 >
-                  {checkingStatus.includes("queue") ? (
-                    <Spinner size="small" />
-                  ) : (
-                    <>Processar próximo da fila</>
-                  )}
-                </Button>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Atualizar
+                </LoadingButton>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -531,17 +559,14 @@ export default function QuizzesClient({
                             </div>
                           </div>
                           
-                          <Button 
+                          <LoadingButton 
                             variant="outline"
                             onClick={() => checkQuizStatus(quiz.id!)}
-                            disabled={checkingStatus.includes(quiz.id!)}
+                            isLoading={checkingStatus.includes(quiz.id!)}
+                            loadingText="Verificando..."
                           >
-                            {checkingStatus.includes(quiz.id!) ? (
-                              <Spinner size="small" />
-                            ) : (
-                              "Verificar Status"
-                            )}
-                          </Button>
+                            Verificar Status
+                          </LoadingButton>
                         </div>
                       </CardContent>
                     </div>
@@ -594,13 +619,14 @@ export default function QuizzesClient({
                           </div>
                         </div>
                         
-                        <Button 
+                        <LoadingButton 
                           variant="destructive"
                           onClick={() => handleDeleteQuiz(quiz.id!)}
-                          disabled={deletingQuizId === quiz.id}
+                          isLoading={deletingQuizId === quiz.id}
+                          loadingText="Excluindo..."
                         >
-                          {deletingQuizId === quiz.id ? <Spinner size="small" /> : "Excluir Quiz"}
-                        </Button>
+                          Excluir Quiz
+                        </LoadingButton>
                       </div>
                     </CardContent>
                   </div>
