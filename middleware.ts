@@ -8,6 +8,16 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get("auth-token")?.value
   const pathname = request.nextUrl.pathname
 
+  // Special handling for the create route to prioritize it over the dynamic [id] route
+  if (pathname === "/quizzes/create") {
+    // Let this route pass through to the correct handler
+    // This ensures Next.js doesn't handle it as a dynamic route
+    if (!token) {
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
+    return NextResponse.next()
+  }
+
   // Rotas públicas que não requerem autenticação
   if (
     pathname === "/" ||

@@ -55,14 +55,32 @@ export default function CreateQuizPage() {
       return
     }
 
+    // Validate required fields
+    const titulo = formData.get("titulo") as string
+    const descricao = formData.get("descricao") as string
+    const tema = formData.get("tema") as string
+    const tipo = formData.get("tipo") as string
+
+    if (!titulo || !descricao || !tema || !tipo) {
+      setError("Todos os campos são obrigatórios")
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
-    // Adiciona o ID da paróquia e do usuário ao formData
-    formData.append("parishId", parishId)
-    formData.append("criadoPor", user.id as string)
-
     try {
+      console.log("Submitting quiz form data...", {
+        titulo,
+        descricao,
+        tema,
+        tipo
+      })
+
+      // Adiciona o ID da paróquia e do usuário ao formData
+      formData.append("parishId", parishId)
+      formData.append("criadoPor", user.id as string)
+
       const result = await createQuizAction(formData)
       
       if (result.success) {
@@ -70,11 +88,12 @@ export default function CreateQuizPage() {
         // Redireciona para o dashboard após criar o quiz
         router.push("/dashboard")
       } else {
+        console.error("Erro retornado pela API:", result.error)
         setError(result.error || "Falha ao criar quiz")
       }
     } catch (err) {
       console.error("Erro ao criar quiz:", err)
-      setError("Falha ao criar quiz")
+      setError("Falha ao criar quiz. Verifique sua conexão e tente novamente.")
     } finally {
       setIsLoading(false)
     }
